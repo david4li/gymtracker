@@ -12,7 +12,7 @@ declare global {
       /** The authenticated caller. */
       user: { id: string; email: string | null };
       /** A Supabase client carrying the caller's JWT, so every query is RLS-scoped. */
-      supabase: SupabaseClient;
+      supabase: SupabaseClient; 
     }
   }
 }
