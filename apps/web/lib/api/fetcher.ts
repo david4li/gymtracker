@@ -5,6 +5,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import type { ApiErrorBody } from "@gymtracker/shared";
 
+/** Deadline for a single API call. Generous enough for a cold start, short enough to fail. */
+const REQUEST_TIMEOUT_MS = 20_000;
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -54,15 +57,38 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!accessToken) redirect("/login");
 
-  const response = await fetch(`${env.API_URL}/api/v1${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      "content-type": "application/json",
-      ...init?.headers,
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  // Without a deadline a single unresponsive request hangs the whole render, and on a host
+  // that sleeps when idle (Render's free tier) the first request after a spin-down can stall
+  // for a long time. Fail with something actionable instead of hanging indefinitely.
+  let response: Response;
+  try {
+    response = await fetch(`${env.API_URL}/api/v1${path}`, {
+      ...init,
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: {
+        "content-type": "application/json",
+        ...init?.headers,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === "TimeoutError") {
+      throw new ApiError(
+        504,
+        "API_TIMEOUT",
+        `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000}s (${env.API_URL}). ` +
+          `If it is hosted on a plan that sleeps when idle, the first request after a ` +
+          `spin-down can exceed this.`,
+      );
+    }
+    throw new ApiError(
+      502,
+      "API_UNREACHABLE",
+      `Could not reach the API at ${env.API_URL}.`,
+      cause instanceof Error ? cause.message : undefined,
+    );
+  }
 
   if (response.status === 401) redirect("/login");
 
