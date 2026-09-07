@@ -1,5 +1,7 @@
 # GymTracker
 
+Try it out here: https://gymtracker-david4li.vercel.app/
+
 A resistance-training tracker: workout logging, routines and templates, strength and volume
 analytics, body stats, and programming tools (periodization calculator, weekly split builder).
 
