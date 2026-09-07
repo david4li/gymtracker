@@ -1,0 +1,33 @@
+# Render blueprint for the Express backend.
+# The frontend is deployed separately on Vercel (Root Directory: apps/web).
+#
+# Build runs from the repo root, not apps/api, because npm workspaces must
+# install and link @gymtracker/shared before the API can be bundled.
+services:
+  - type: web
+    name: gymtracker-api
+    runtime: node
+    # NOTE: the free plan spins down after ~15 minutes of inactivity and cold
+    # starts take 30-60s, which will hang the app mid-workout. Use starter or
+    # above for real use. See "Deployment" in the plan.
+    plan: starter
+    region: virginia
+    branch: main
+    buildCommand: npm ci && npm run build -w @gymtracker/api
+    startCommand: npm run start -w @gymtracker/api
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Set these in the Render dashboard. sync:false keeps them out of git.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # Comma-separated origins allowed to call the API from a browser.
+      # Normally empty: the Vercel frontend calls this API server-to-server.
+      - key: ALLOWED_ORIGINS
+        sync: false

@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,14 +11,15 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build/
+dist/
 
 # misc
 .DS_Store
@@ -32,6 +33,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the templates must be committed, or a fresh clone has no idea what to set.
+!.env.example
 
 # vercel
 .vercel
@@ -40,8 +43,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database (local SQLite file, regenerate with `npm run db:push && npm run db:seed`)
+# the legacy SQLite database, kept only as a migration fixture
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
+
+# supabase CLI scratch state (project ref, temp pooler config)
+supabase/.temp/
+supabase/.branches/

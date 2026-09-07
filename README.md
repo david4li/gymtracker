@@ -1,55 +1,79 @@
 # GymTracker
 
-A personal resistance-training tracker: workout logging, routines/templates, strength & volume analytics, body stats, and lightweight programming tools (periodization calculator, weekly split builder).
+A resistance-training tracker: workout logging, routines and templates, strength and volume
+analytics, body stats, and programming tools (periodization calculator, weekly split builder).
 
-Single-user, local-only — no accounts, no auth, no cloud sync. Data lives in a local SQLite file (`sqlite.db`).
+Multi-user, with accounts and cloud sync. A Next.js frontend talks to an Express API, which
+stores everything in Supabase Postgres behind row-level security.
+
+## Architecture
+
+```
+apps/web      Next.js 16 frontend. Server Components fetch the API over HTTP.
+apps/api      Express 5 backend. supabase-js, scoped by the caller's JWT.
+packages/     shared/ — enums, DTOs, zod schemas, and pure calculations used by both sides.
+supabase/     versioned SQL migrations (schema, RLS, indexes, grants).
+tools/        one-off migration from the old SQLite file, plus an RLS regression check.
+```
+
+The browser never calls the API directly. Server Components and Server Actions call it
+server-to-server, which means no CORS, and the Supabase session cookies stay `httpOnly` —
+`@supabase/supabase-js` never enters the client bundle, so an XSS payload has no token to steal.
+
+Data isolation is enforced by Postgres row-level security, not by hand-written `where user_id`
+clauses. The API attaches the caller's JWT to every query so `auth.uid()` resolves per request.
+`tools/verify-rls/` asserts that boundary still holds.
 
 ## Stack
 
 - [Next.js 16](https://nextjs.org) (App Router, Turbopack) + TypeScript
-- [Drizzle ORM](https://orm.drizzle.team) + `better-sqlite3`
-- Tailwind CSS v4
-- [Recharts](https://recharts.org) for charts
-- [Zustand](https://zustand.docs.pmnd.rs) for in-progress workout UI state
-- [Zod](https://zod.dev) for Server Action input validation
+- [Express 5](https://expressjs.com) + [supabase-js](https://supabase.com/docs/reference/javascript)
+- [Supabase](https://supabase.com) Postgres, Auth, and row-level security
+- Tailwind CSS v4, [Recharts](https://recharts.org), [Zustand](https://zustand.docs.pmnd.rs)
+- [Zod](https://zod.dev), shared between API validation and frontend actions
 
-> This repo targets Next.js 16, which has real breaking changes vs. older Next.js knowledge (async `params`/`searchParams`, Server Actions as the standard mutation pattern, `proxy` replacing `middleware`, etc.) — see `AGENTS.md` and `node_modules/next/dist/docs/` if you're extending this.
+> This repo targets Next.js 16, which has real breaking changes vs. older Next.js knowledge
+> (async `params`/`searchParams`, Server Actions as the standard mutation pattern, `proxy`
+> replacing `middleware`). See `apps/web/AGENTS.md` and `node_modules/next/dist/docs/`.
 
 ## Getting started
 
 ```bash
 npm install
-npm run db:push   # create the local SQLite schema (sqlite.db)
-npm run db:seed   # seed ~65 exercises, sample routines, workouts, and body stats
-npm run dev
+cp apps/api/.env.example apps/api/.env      # fill in SUPABASE_PUBLISHABLE_KEY
+cp apps/web/.env.example apps/web/.env      # same key, plus API_URL
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Apply the database schema to your Supabase project:
 
-`sqlite.db` is gitignored, so a fresh clone starts with no database until you run the two `db:*` commands above.
+```bash
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
 
-## Scripts
+Then run each side in its own terminal:
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start the dev server (Turbopack) |
-| `npm run build` / `npm run start` | Production build / run |
-| `npm run lint` | ESLint |
-| `npm run db:push` | Push the Drizzle schema to `sqlite.db` |
-| `npm run db:generate` | Generate versioned SQL migrations (optional; `db:push` is the default local workflow) |
-| `npm run db:studio` | Open Drizzle Studio to browse/edit the DB |
-| `npm run db:seed` | Seed sample exercises/routines/workouts/body stats (safe to re-run) |
+```bash
+npm run dev -w @gymtracker/api    # http://localhost:4000
+npm run dev -w @gymtracker/web    # http://localhost:3000
+```
 
-## Project layout
+Sign up at `/signup`. Email confirmation is on, so the account is created once you follow the
+emailed link.
 
-- `app/` — routes (dashboard, exercises, routines, workouts, analytics, body-stats, programming, settings)
-- `components/` — UI primitives (`ui/`), nav shell, and feature components grouped by section
-- `lib/db/` — Drizzle schema, DB connection singleton, seed data/script
-- `lib/queries/` — read-only data access for Server Components
-- `lib/actions/` — Zod-validated Server Actions (mutations)
-- `lib/calculations/` — pure functions (1RM estimation, PR detection, volume, plateau heuristic, periodization, streaks, unit conversion)
-- `lib/store/` — Zustand store for ephemeral active-workout UI state (rest timer, exercise switcher)
+## Deployment
 
-## Notes on scope
+The frontend deploys to Vercel with **Root Directory `apps/web`**; the API deploys to Render
+via `render.yaml`, which builds from the repo root so npm workspaces can link the shared
+package first. Colocate both regions with your Supabase project.
 
-Programming tools are intentionally lightweight first-pass implementations: the periodization calculator is a stateless generator (not persisted, not per-exercise auto-progression), and the plateau/deload callout on each exercise's analytics page is a simple heuristic, not a statistical model. Everything else (logging, routines, history, analytics, body stats) is fully functional against the local database.
+Render's free plan sleeps after ~15 minutes and takes 30-60s to wake, which will hang the app
+mid-workout and can outlast Vercel's function timeout. Use a plan that does not spin down.
+
+## Security notes
+
+- The API is given only the **publishable** key. It refuses to start if handed a secret key,
+  because that carries `bypassrls` and would silently defeat every policy.
+- `API_URL` has no `NEXT_PUBLIC_` prefix on purpose: the backend URL must not reach the browser.
+- Foreign key checks bypass RLS in Postgres, so the API re-checks referenced exercise ids
+  through the caller's client before inserting.
