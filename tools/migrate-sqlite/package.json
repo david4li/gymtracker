@@ -1,0 +1,14 @@
+{
+  "name": "@gymtracker/migrate-sqlite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "node --env-file-if-exists=.env migrate.mjs",
+    "verify": "node --env-file-if-exists=.env verify.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.115.0",
+    "better-sqlite3": "^13.0.3"
+  }
+}
