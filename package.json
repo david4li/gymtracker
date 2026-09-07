@@ -10,6 +10,8 @@
   "scripts": {
     "dev:web": "npm run dev -w @gymtracker/web",
     "dev:api": "npm run dev -w @gymtracker/api",
+    "start": "npm run start -w @gymtracker/api",
+    "build:api": "npm run build -w @gymtracker/api",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
